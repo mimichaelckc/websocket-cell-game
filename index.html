@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <h1>Server Page</h1>
+    <button id = "btnCreate">New Server</button>
+    <button id = "btnJoin">Join Server</button>
+    <input type="text" name="" id="txtGameID">
+    <div id  = 'divPlayers'></div>
+    <div id="divBoard"></div>
+    <script>
+        
+        let clientID = null;
+        let gameID = null;
+        let playerColor = null;
+
+        let ws = new WebSocket("ws://localhost:9090");
+        const btnCreate = document.getElementById("btnCreate");
+        const btnJoin =  document.getElementById("btnJoin");
+        const txtGameID =  document.getElementById("txtGameID");
+        const divPlayers =  document.getElementById("divPlayers");
+        const divBoard =  document.getElementById("divBoard");
+
+        btnJoin.addEventListener("click", e=>{            
+            if(gameID == null){
+                gameID = txtGameID.value;
+                console.log("Game ID = "+gameID);
+            }
+            const payload = {
+                "method":"join",
+                "clientID" : clientID,
+                "gameID": gameID
+            }
+            ws.send(JSON.stringify(payload))
+        })
+
+        btnCreate.addEventListener("click", e=>{
+            const payload = {
+                "method":"create",
+                "clientID" : clientID
+            }
+            ws.send(JSON.stringify(payload))
+        })
+        
+        ws.onmessage = message =>{
+            //message.data
+            const response = JSON.parse(message.data);
+            console.log(response);
+            if(response.method == "connect"){
+                clientID = response.clientID;
+                console.log("ClientID = "+clientID);
+            }
+
+            if(response.method == "create"){                
+                gameID = response.gameID;
+                txtGameID.value = response.game.id;
+                console.log("Game ID = "+response.game.id);
+                console.log("Balls = "+response.game.balls);
+            }
+
+            if(response.method == "join"){                
+                const game = response.game;
+                
+                while(divPlayers.firstChild)
+                    divPlayers.removeChild (divPlayers.firstChild)
+
+                game.clients.forEach (c => {
+                   
+                    const d = document.createElement("div");
+                    d.style.width = "200px";
+                    d.style.background = c.color
+                    d.textContent = c.clientID;
+                    divPlayers.appendChild(d);
+
+                    if(c.clientID === clientID) playerColor = c.color;
+                    
+                })
+                while(divBoard.firstChild)
+                divBoard.removeChild (divBoard.firstChild)
+
+                for(let i =0; i< game.balls;i++){
+                    const b = document.createElement("button");
+                    b.id = "ball"+(i+1);
+                    b.tag = i+1;
+                    b.textContent = i+1;
+                    b.style.width = "150px";
+                    b.style.height = "150px";
+                    b.addEventListener("click", e=>{
+                        b.style.background = playerColor;
+                        const payload = {
+                            "method": "play",
+                            "clientID": clientID,
+                            "gameID": gameID,
+                            "ballID": b.tag,
+                            "color": playerColor
+                        }
+                        ws.send(JSON.stringify(payload));
+                    })
+                    divBoard.appendChild(b)
+                }
+            }
+
+            if(response.method === "update"){
+                if (!response.game.state) return;
+                for(const b of Object.keys(response.game.state)){
+                    const color = response.game.state[b];
+                    const ballObject = document.getElementById("ball"+b);
+                    ballObject.style.backgroundColor = color;
+
+                }
+            }
+
+        }
+    </script>
+</body>
+</html>
